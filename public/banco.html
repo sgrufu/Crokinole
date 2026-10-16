@@ -182,7 +182,7 @@ function disegna(adesso) {
         T.disegnaDisco(ctx, vista, p.x, p.y, 0, { alfa: 0.45, vietato: !C.posizioneLibera(stato, 0, phi) });
       }
       if (mira && stato.posizione) {
-        T.disegnaMira(ctx, vista, stato.posizione, mira.puntatore, T.miraDaTrascinamento(stato.posizione, mira.puntatore, ui));
+        T.disegnaMira(ctx, vista, stato.posizione, mira.puntatore, T.miraDaTrascinamento(stato.posizione, mira.puntatore, vista.ui));
       }
     } else if (anteprima && (modo === '0' || modo === '1')) {
       T.disegnaDisco(ctx, vista, anteprima.x, anteprima.y, Number(modo), { alfa: 0.45 });
@@ -228,7 +228,7 @@ canvas.addEventListener('pointerdown', ev => {
 
 canvas.addEventListener('pointerup', () => {
   if (!mira) return;
-  const m = T.miraDaTrascinamento(stato.posizione, mira.puntatore, ui);
+  const m = T.miraDaTrascinamento(stato.posizione, mira.puntatore, vista.ui);
   mira = null;
   if (m.annullato) { mostra('Tiro annullato (trascinamento troppo corto).'); return; }
   tira(m);

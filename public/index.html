@@ -38,6 +38,10 @@
   #ingresso h1 { font-size: 46px; margin: 0 0 4px; letter-spacing: 0.01em; }
   #ingresso p { color: var(--tenue); margin: 0 0 22px; }
   #ingresso .campo { display: flex; gap: 8px; }
+  .regole { margin-top: 18px; text-align: left; max-width: 420px; font-size: 14px; color: #e9d9bd; }
+  .regole summary { cursor: pointer; color: var(--oro); text-align: center; }
+  .regole ul { margin: 10px 0 0; padding-left: 18px; }
+  .regole li { margin-bottom: 6px; }
   .linkBanco { margin-top: 18px; font-size: 13px; color: var(--tenue); }
   .linkBanco a { color: var(--oro); }
   #erroreIngresso { color: var(--errore); min-height: 1.4em; margin-top: 10px; }
@@ -185,13 +189,24 @@
 <section id="ingresso" class="nascosto">
   <form id="moduloIngresso" autocomplete="off">
     <h1>Crokinole</h1>
-    <p>In 2 o in 4 a coppie. Si tira col dito, qui col mouse.</p>
+    <p>In 2 o in 4 a coppie.</p>
     <div class="campo">
       <input type="text" id="nome" maxlength="16" placeholder="Il tuo nome" aria-label="Il tuo nome" required>
       <button class="primario" type="submit">Entra</button>
     </div>
     <div id="erroreIngresso" role="alert"></div>
-    <p class="linkBanco"><a href="banco.html">Banco di prova della fisica</a>: prova i tiri da solo, senza entrare in partita.</p>
+    <details class="regole">
+      <summary>Regole</summary>
+      <ul>
+        <li>Si tira a turno dal proprio arco: scegli il punto, trascina indietro e lascia. Più trascini, più è forte.</li>
+        <li>Se sul tavolo ci sono dischetti avversari devi colpirne almeno uno. Se non ce ne sono, il tuo deve arrivare nel 15.</li>
+        <li>Tiro non valido: si tolgono il tuo dischetto e quelli che ha spostato.</li>
+        <li>Nel buco centrale vale 20 e resta tuo. Chi tocca la linea esterna o cade nel fossato è fuori.</li>
+        <li>A fine round: 15, 10 o 5 secondo la zona (sulla linea vale la più bassa). Segna solo chi ha di più, la differenza.</li>
+        <li>Vince chi arriva per primo ai punti scelti in sala.</li>
+      </ul>
+    </details>
+    <p class="linkBanco"><a href="banco.html">Prova i tiri da solo</a></p>
   </form>
 </section>
 
@@ -205,7 +220,7 @@
 
     <section id="sala" class="nascosto">
       <h1>Sala d'attesa</h1>
-      <p>Siediti in una colonna: chi sta nella stessa colonna gioca in squadra. In 2 vi mettete in colonne diverse, in 4 due per colonna.</p>
+      <p>Stessa colonna, stessa squadra.</p>
       <div id="colonne"></div>
       <div id="azioniSala">
         <label id="sceltaTempo">Tempo per ogni tiro
@@ -443,7 +458,7 @@ function renderSegnapunti() {
     el.dataset.round = inSala ? '' : String(pk.round);
     if (n === null) delete el.dataset.n;
   }
-  $('centroSegnapunti').innerHTML = inSala ? `Si gioca fino a ${pk.puntiVittoria}`
+  $('centroSegnapunti').innerHTML = inSala ? `fino a ${pk.puntiVittoria}`
     : `Round <span class="numero">${pk.round}</span><br>fino a ${pk.puntiVittoria}`;
 }
 
@@ -460,7 +475,7 @@ function renderSala() {
       const occ = pk.slot[slot];
       const b = document.createElement('button');
       b.className = 'posto' + (occ ? ' occupato' : '') + (occ && occ.io ? ' mio' : '');
-      if (!occ) b.innerHTML = '<span class="vuoto">Posto libero: siediti qui</span>';
+      if (!occ) b.innerHTML = '<span class="vuoto">Siediti qui</span>';
       else b.innerHTML = `<span>${esc(occ.nome)}</span><span class="stato">${occ.io ? 'tu' : occ.connesso ? '' : 'scollegato'}</span>`;
       b.disabled = !!(occ && !occ.io && pk.io.slot === null);
       if (occ && !occ.io && pk.io.slot !== null) b.title = 'Chiedi di scambiare il posto';
@@ -473,9 +488,9 @@ function renderSala() {
   renderSceltaPunti();
   $('bottoneAvvia').disabled = !pk.puoAvviare;
   const seduti = pk.slot.filter(Boolean).length;
-  $('notaAvvio').textContent = pk.puoAvviare ? 'Pronti: chiunque sia seduto può avviare.'
-    : seduti === 2 ? 'In 2 serve un giocatore per colonna.'
-    : 'Si parte in 2 (uno per colonna) o in 4.';
+  $('notaAvvio').textContent = pk.puoAvviare ? ''
+    : seduti === 2 ? 'Serve uno per colonna.'
+    : 'Si gioca in 2 o in 4.';
   $('richiestaMia').innerHTML = pk.richiestaMia
     ? `Hai chiesto a ${esc(pk.richiestaMia.a)} di scambiare il posto. <button id="annullaRichiesta">Annulla</button>` : '';
   const ann = $('annullaRichiesta');
@@ -558,7 +573,7 @@ function aggiornaTurno() {
     else if (pk.tempo.modo === 'sospeso') testo = `${nome} si è scollegato: si aspetta che rientri`;
     else if (pk.tempo.modo === 'pronto') testo = mio ? 'Tocca a te' : `${nome} deve dire che è pronto`;
     else {
-      testo = mio ? (pk.posizione ? 'Premi sul dischetto e trascina indietro' : 'Tocca a te: clicca sull\'arco') : `Tocca a ${nome}`;
+      testo = mio ? (pk.posizione ? 'Trascina indietro e lascia' : 'Tocca a te: scegli il punto sull\'arco') : `Tocca a ${nome}`;
       if (pk.tempo.msAllaScadenza != null) {
         orologio = Math.max(0, Math.ceil((pk.tempo.msAllaScadenza - trascorso) / 1000)).toString();
       }
@@ -627,7 +642,7 @@ function scegliFinestra() {
   if (pk.puoiEliminare) {
     return {
       chiave: 'elimina',
-      html: `<h2>Sei il primo a rientrare</h2><p>Gli altri giocatori non sono collegati. Puoi aspettarli o eliminare la Partita e tornare in sala d'attesa.</p>
+      html: `<h2>Sei il primo a rientrare</h2><p>Gli altri non sono collegati: aspettali o elimina la Partita.</p>
         <div class="bottoni"><button id="fElimina">Elimina la Partita</button><button class="primario" id="fAspetta">Aspetta gli altri</button></div>`,
       azioni: { fElimina: () => posta('/elimina'), fAspetta: () => { finestraChiusa = 'elimina'; renderFinestra(); } },
     };
@@ -636,7 +651,7 @@ function scegliFinestra() {
   if (pk.fase === 'tiro' && toccaAMe() && pk.tempo.modo === 'pronto' && tiroSbloccato()) {
     return {
       chiave: 'pronto',
-      html: `<h2>Tocca a te</h2><p>Sei rientrato al tuo turno. Il tempo per tirare parte quando confermi.</p>
+      html: `<h2>Tocca a te</h2><p>Il tempo parte quando confermi.</p>
         <div class="bottoni"><button class="primario" id="fPronto">Sono pronto</button></div>`,
       azioni: { fPronto: () => posta('/pronto') },
     };
@@ -652,7 +667,6 @@ function scegliFinestra() {
       return {
         chiave: 'round' + r.round + (fatto ? 'f' : ''),
         html: `<h2>Fine del round ${r.round}</h2>${tabella}<div class="esitoRound">${esito}</div>
-          <p>Rossi ${r.punteggi[0]}, Blu ${r.punteggi[1]}. Si gioca fino a ${pk.puntiVittoria}.</p>
           <div class="attese">${mancano.length ? 'Aspettiamo: ' + esc(mancano.join(', ')) : ''}</div>
           <div class="bottoni">${giocatore ? `<button class="primario" id="fContinua" ${fatto ? 'disabled' : ''}>${fatto ? 'Aspetto gli altri' : 'Continua'}</button>` : ''}</div>`,
         azioni: { fContinua: () => posta('/continua') },
@@ -753,7 +767,7 @@ function fotogramma(adesso) {
     T.disegnaDisco(ctx, v, p.x, p.y, C.squadraDi(mioPosto()), { alfa: 0.45, vietato: !libera });
   }
   if (mira && pk.posizione) {
-    T.disegnaMira(ctx, v, pk.posizione, mira.puntatore, T.miraDaTrascinamento(pk.posizione, mira.puntatore));
+    T.disegnaMira(ctx, v, pk.posizione, mira.puntatore, T.miraDaTrascinamento(pk.posizione, mira.puntatore, v.ui));
   }
 }
 
@@ -783,7 +797,7 @@ function quandoMuove(ev) {
 
 function quandoRilascia() {
   if (!mira) return;
-  const m = T.miraDaTrascinamento(pk.posizione, mira.puntatore);
+  const m = T.miraDaTrascinamento(pk.posizione, mira.puntatore, vistaAttuale().ui);
   mira = null;
   if (m.annullato || !toccaAMe()) return;
   tira(m.angolo, m.forza);

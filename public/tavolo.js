@@ -23,6 +23,9 @@
   const UI_DEFAULT = {
     trascinamentoPieno: 11.5, // trascinando di tanti cm si tira a forza 1 (oltre non cresce)
     trascinamentoMinimo: 1,   // sotto: tiro annullato
+    // su touch il tavolo e' piccolo e 11.5 cm sono pochi pixel: la forza piena
+    // richiede almeno tanti pixel (CSS) di trascinamento; 0 = come col mouse
+    pienoMinimoTouchPx: 170,
     lunghezzaFreccia: 2.5,    // freccia di mira; 0 = niente freccia
     quotaElastico: 0.4,       // l'elastico tratteggiato mostra solo questa frazione del trascinamento (0 = niente)
     margineBordo: 3,          // cornice di legno oltre il fossato
@@ -60,6 +63,13 @@
     const cx = larghezzaPx / 2;
     const cy = (altezzaPx - altezzaU * k) / 2 + raggioTot * k; // lo spazio libero resta sotto
     const rot = -Math.PI / 2 - angoloInBasso;
+    // su schermo touch piccolo si allunga il trascinamento (vedi pienoMinimoTouchPx)
+    const touch = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    const pxPerCm = k / ((typeof window !== 'undefined' && window.devicePixelRatio) || 1);
+    if (touch && ui.pienoMinimoTouchPx && ui.trascinamentoPieno * pxPerCm < ui.pienoMinimoTouchPx) {
+      const f = ui.pienoMinimoTouchPx / (ui.trascinamentoPieno * pxPerCm);
+      ui = { ...ui, trascinamentoPieno: ui.trascinamentoPieno * f, trascinamentoMinimo: ui.trascinamentoMinimo * f };
+    }
     const cr = Math.cos(rot), sr = Math.sin(rot);
     return {
       k, cx, cy, rot, G, ui, larghezzaPx, altezzaPx, angoloInBasso,
