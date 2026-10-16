@@ -1,0 +1,10 @@
+# Blueprint di Render: su render.com  New -> Blueprint -> scegli questa repo.
+services:
+  - type: web
+    name: crokinole
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /sveglia
+    autoDeploy: true

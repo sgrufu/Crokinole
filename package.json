@@ -1,0 +1,14 @@
+{
+  "name": "crokinole",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Crokinole in rete, in 2 o in 4 a coppie",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "./prove.sh"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

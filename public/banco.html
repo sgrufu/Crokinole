@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crokinole — banco di prova</title>
+<style>
+  :root {
+    --tavolo: #12362a; --tavolo2: #163a2e; --testo: #eee6d4; --tenue: #a9b8ad;
+    --oro: #e6b84a; --pannello: rgba(0,0,0,0.28); --bordo: rgba(255,255,255,0.12);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(ellipse at 40% 30%, var(--tavolo2), var(--tavolo) 70%);
+    color: var(--testo); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  #app { display: grid; grid-template-columns: 1fr 360px; height: 100vh; }
+  #zona { position: relative; min-height: 0; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+  aside { overflow-y: auto; padding: 14px 16px 30px; background: var(--pannello); border-left: 1px solid var(--bordo); }
+  h1 { font: 600 22px Georgia, serif; margin: 0 0 4px; }
+  h2 { font: 600 15px Georgia, serif; margin: 18px 0 6px; color: var(--oro); }
+  p.nota { color: var(--tenue); margin: 0 0 10px; font-size: 13px; }
+  .riga { display: grid; grid-template-columns: 1fr 64px; gap: 2px 8px; align-items: center; margin: 6px 0; }
+  .riga label { grid-column: 1 / 3; font-size: 12.5px; color: var(--tenue); display: flex; justify-content: space-between; }
+  .riga label b { color: var(--testo); font-weight: 600; }
+  .riga input[type=range] { grid-column: 1 / 3; width: 100%; accent-color: var(--oro); }
+  .bottoni { display: flex; flex-wrap: wrap; gap: 6px; }
+  button {
+    background: rgba(255,255,255,0.08); color: var(--testo); border: 1px solid var(--bordo);
+    border-radius: 6px; padding: 6px 10px; font: inherit; cursor: pointer;
+  }
+  button:hover { background: rgba(255,255,255,0.14); }
+  button.attivo { border-color: var(--oro); color: var(--oro); }
+  #esito { background: rgba(0,0,0,0.25); border-radius: 6px; padding: 8px 10px; font-size: 13px; min-height: 60px; white-space: pre-line; }
+  textarea { width: 100%; height: 120px; background: rgba(0,0,0,0.35); color: var(--testo); border: 1px solid var(--bordo); border-radius: 6px; font: 12px ui-monospace, monospace; }
+  @media (max-width: 800px) { #app { grid-template-columns: 1fr; grid-template-rows: 60vh auto; } aside { border-left: 0; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="zona"><canvas id="c"></canvas></div>
+  <aside>
+    <h1>Banco di prova</h1>
+    <p class="nota">Stesso motore e stesso disegno del gioco. Tiri tu dal quarto in basso (Rossi): clicca sull'arco per mettere il dischetto, poi premi sul dischetto e trascina indietro.</p>
+
+    <h2>Cosa fa il clic</h2>
+    <div class="bottoni" id="modi">
+      <button data-modo="tira" class="attivo">Tira</button>
+      <button data-modo="0">Metti un Rosso</button>
+      <button data-modo="1">Metti un Blu</button>
+      <button data-modo="gomma">Togli</button>
+    </div>
+
+    <h2>Tavolo</h2>
+    <div class="bottoni">
+      <button id="annulla">Annulla ultimo tiro</button>
+      <button id="svuota">Svuota</button>
+      <button id="casuale">10 a caso</button>
+      <button id="moviola">Moviola</button>
+      <button id="lento">Rallentatore: no</button>
+      <button id="audio">Suoni: si</button>
+    </div>
+
+    <h2>Ultimo tiro</h2>
+    <div id="esito">Nessun tiro ancora.</div>
+
+    <h2>Fisica</h2>
+    <div id="cursoriFisica"></div>
+    <h2>Interfaccia</h2>
+    <div id="cursoriUi"></div>
+
+    <h2>Parametri</h2>
+    <p class="nota">Solo quelli diversi dal default: da incollare in FISICA_DEFAULT (crokinole.js) e UI_DEFAULT (tavolo.js).</p>
+    <div class="bottoni"><button id="ripristina">Ripristina i default</button></div>
+    <textarea id="json" readonly></textarea>
+  </aside>
+</div>
+
+<script src="crokinole.js"></script>
+<script src="tavolo.js"></script>
+<script>
+'use strict';
+const C = window.Crokinole;
+const T = window.Tavolo;
+const G = C.GEOMETRIA;
+
+const CURSORI_FISICA = [
+  ['decelerazione', 'Attrito (decelerazione, cm/s²)', 5, 150, 1],
+  ['velocitaMax', 'Velocità a forza piena (cm/s)', 50, 300, 5],
+  ['restituzioneDischi', 'Rimbalzo fra dischetti', 0.3, 1, 0.01],
+  ['restituzionePioli', 'Rimbalzo sui pioli', 0.1, 1, 0.01],
+  ['sogliaBuco', 'Soglia del 20: oltre questa velocità lo salta (cm/s)', 2, 100, 1],
+  ['raggioCattura', 'Raggio di cattura del 20 (cm)', 0.1, 1.75, 0.05],
+  ['raggioRibaltamento', 'Chi si ferma entro questo raggio dal centro cade nel 20 (cm)', 0, 1.75, 0.05],
+  ['attrazioneBuco', 'Buco: quanto attira verso il centro (cm/s², 0 = niente)', 0, 750, 10],
+  ['frenataBuco', 'Buco: quanto frena chi ci passa sopra (cm/s²)', 0, 500, 10],
+  ['perditaBordo', 'Buco: velocità persa sul bordo all\'uscita (%)', 0, 50, 1, 'percento'],
+  ['velocitaArresto', 'Velocità di arresto (cm/s)', 0.1, 5, 0.05],
+  ['rumoreAngolo', 'Imprecisione angolo (gradi)', 0, 5, 0.1, 'gradi'],
+  ['rumoreForza', 'Imprecisione forza (%)', 0, 30, 1, 'percento'],
+];
+const CURSORI_UI = [
+  ['trascinamentoPieno', 'Trascinamento per forza piena (cm del tavolo)', 5, 30, 0.5],
+  ['trascinamentoMinimo', 'Sotto questo il tiro si annulla (cm)', 0.2, 5, 0.1],
+  ['lunghezzaFreccia', 'Lunghezza freccia di mira (cm, 0 = niente)', 0, 15, 0.5],
+  ['quotaElastico', 'Elastico: quota del trascinamento mostrata (0 = niente)', 0, 1, 0.05],
+];
+
+let fisica = { ...C.FISICA_DEFAULT };
+let ui = { ...T.UI_DEFAULT };
+try {
+  const salvato = JSON.parse(localStorage.getItem('crokinole-banco-cm') || 'null');
+  if (salvato) { Object.assign(fisica, salvato.fisica || {}); Object.assign(ui, salvato.ui || {}); }
+} catch (e) {}
+
+const suoni = T.creaSuoni();
+let modo = 'tira';
+let lento = false;
+let prossimoId = 5000;
+
+function statoVuoto() {
+  const s = C.nuovaPartita({ giocatori: ['Banco', 'Bersagli'], seed: 1, primo: 0, fisica });
+  return { ...s, daTirare: [999, 999] };
+}
+let stato = statoVuoto();
+let storia = [];        // stati prima di ogni tiro, per "annulla"
+let animazione = null;  // {traiettoria, statici, inizio, fine, suonati, velocita}
+let ultimo = null;      // {prima, out} per la moviola
+let mira = null;        // {puntatore} mentre si trascina
+let anteprima = null;   // punto del tavolo sotto il mouse
+
+// ---------------------------------------------------------------- canvas
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let vista = null;
+function ridimensiona() {
+  const r = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.round(r.width * dpr));
+  canvas.height = Math.max(1, Math.round(r.height * dpr));
+  vista = T.creaVista(canvas.width, canvas.height, G, C.angoloPosto(2, 0), ui);
+}
+new ResizeObserver(ridimensiona).observe(document.getElementById('zona'));
+ridimensiona();
+
+function puntoDa(ev) {
+  const r = canvas.getBoundingClientRect();
+  const dpr = canvas.width / r.width;
+  const [x, y] = vista.daSchermo((ev.clientX - r.left) * dpr, (ev.clientY - r.top) * dpr);
+  return { x, y };
+}
+
+// ---------------------------------------------------------------- disegno
+
+function disegna(adesso) {
+  if (!ctx || !vista) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  T.disegnaTavolo(ctx, vista, C);
+
+  if (animazione) {
+    const t = (adesso - animazione.inizio) / 1000 * animazione.velocita;
+    const pos = T.posizioniAl(animazione.traiettoria, t);
+    for (const s of animazione.traiettoria.suoni) {
+      if (s.t <= t && !animazione.suonati.has(s)) { animazione.suonati.add(s); suoni.suona(s); }
+    }
+    for (const d of animazione.statici) T.disegnaDisco(ctx, vista, d.x, d.y, d.squadra);
+    for (const [id, p] of pos) if (p) T.disegnaDisco(ctx, vista, p.x, p.y, animazione.squadre.get(id));
+    if (t >= animazione.traiettoria.durata) { animazione = null; }
+  } else {
+    for (const d of stato.dischi) T.disegnaDisco(ctx, vista, d.x, d.y, d.squadra);
+    if (modo === 'tira') {
+      if (stato.posizione) {
+        T.disegnaDisco(ctx, vista, stato.posizione.x, stato.posizione.y, 0, { alone: 'rgba(230,184,74,0.25)' });
+      }
+      if (anteprima && !mira && T.vicinoAllArco(anteprima, G) &&
+          !(stato.posizione && T.sopraIlDisco(anteprima, stato.posizione, G))) {
+        const phi = Math.atan2(anteprima.y, anteprima.x);
+        const p = C.posizioneSuArco(2, 0, phi);
+        T.disegnaDisco(ctx, vista, p.x, p.y, 0, { alfa: 0.45, vietato: !C.posizioneLibera(stato, 0, phi) });
+      }
+      if (mira && stato.posizione) {
+        T.disegnaMira(ctx, vista, stato.posizione, mira.puntatore, T.miraDaTrascinamento(stato.posizione, mira.puntatore, ui));
+      }
+    } else if (anteprima && (modo === '0' || modo === '1')) {
+      T.disegnaDisco(ctx, vista, anteprima.x, anteprima.y, Number(modo), { alfa: 0.45 });
+    }
+  }
+  requestAnimationFrame(disegna);
+}
+requestAnimationFrame(disegna);
+
+// ---------------------------------------------------------------- gesti
+
+canvas.addEventListener('pointermove', ev => {
+  anteprima = puntoDa(ev);
+  if (mira) mira.puntatore = anteprima;
+});
+canvas.addEventListener('pointerleave', () => { anteprima = null; });
+
+canvas.addEventListener('pointerdown', ev => {
+  suoni.sblocca();
+  if (animazione) return;
+  const p = puntoDa(ev);
+  if (modo === 'tira') {
+    if (stato.posizione && T.sopraIlDisco(p, stato.posizione, G)) {
+      mira = { puntatore: p };
+      canvas.setPointerCapture(ev.pointerId);
+      return;
+    }
+    if (T.vicinoAllArco(p, G)) {
+      // sul banco si puo' riposizionare (nel gioco no): si riparte senza posizione
+      try { stato = C.posiziona({ ...stato, posizione: null }, 0, Math.atan2(p.y, p.x)).stato; } catch (e) { mostra(e.message); }
+    }
+    return;
+  }
+  if (modo === 'gomma') {
+    stato = { ...stato, dischi: stato.dischi.filter(d => Math.hypot(d.x - p.x, d.y - p.y) > G.raggioDisco) };
+    return;
+  }
+  const libero = stato.dischi.every(d => Math.hypot(d.x - p.x, d.y - p.y) >= 2 * G.raggioDisco) &&
+    C.PIOLI.every(q => Math.hypot(q.x - p.x, q.y - p.y) >= G.raggioDisco + G.raggioPiolo) &&
+    Math.hypot(p.x, p.y) < G.raggioEsterno - G.raggioDisco && Math.hypot(p.x, p.y) > G.raggioBuco;
+  if (libero) stato = { ...stato, dischi: [...stato.dischi, { id: prossimoId++, squadra: Number(modo), x: p.x, y: p.y }] };
+});
+
+canvas.addEventListener('pointerup', () => {
+  if (!mira) return;
+  const m = T.miraDaTrascinamento(stato.posizione, mira.puntatore, ui);
+  mira = null;
+  if (m.annullato) { mostra('Tiro annullato (trascinamento troppo corto).'); return; }
+  tira(m);
+});
+
+function tira(m) {
+  const prima = { ...stato, fisica: { ...fisica } };
+  const out = C.tira(prima, 0, { angolo: m.angolo, forza: m.forza });
+  storia.push(stato);
+  ultimo = { prima, out };
+  suoni.suona({ tipo: 'tiro' });
+  avviaAnimazione(prima, out);
+  stato = { ...out.stato, fase: 'tiro', turno: 0, daTirare: [999, 999], posizione: null };
+  descrivi(prima, out, m);
+}
+
+function avviaAnimazione(prima, out) {
+  const tr = out.stato.ultimoTiro.traiettoria;
+  const idTirato = out.stato.ultimoTiro.esito.idTirato;
+  const squadre = new Map(prima.dischi.map(d => [d.id, d.squadra]));
+  squadre.set(idTirato, 0);
+  animazione = {
+    traiettoria: tr, squadre,
+    statici: prima.dischi.filter(d => !tr.ids.includes(d.id)),
+    inizio: performance.now(), suonati: new Set(), velocita: lento ? 0.25 : 1,
+  };
+}
+
+function descrivi(prima, out, m) {
+  const e = out.stato.ultimoTiro.esito;
+  const tr = out.stato.ultimoTiro.traiettoria;
+  const urti = tr.suoni.filter(s => s.tipo === 'urto').length;
+  const pioli = tr.suoni.filter(s => s.tipo === 'piolo').length;
+  const fine = tr.foto[tr.foto.length - 1][tr.ids.indexOf(e.idTirato)];
+  const percorso = fine ? Math.hypot(fine[0] - e.partenza.x, fine[1] - e.partenza.y).toFixed(1) + ' cm' : 'uscito';
+  mostra([
+    `${e.valido ? 'Valido' : 'FALLO: ' + e.motivo}`,
+    `forza ${(m.forza * 100).toFixed(0)}% = ${(m.forza * fisica.velocitaMax).toFixed(0)} cm/s`,
+    `durata ${tr.durata.toFixed(2)} s, tiratore: ${percorso}`,
+    `urti fra dischetti ${urti}, sui pioli ${pioli}`,
+    e.ventiFatti.length ? `20: ${e.ventiFatti.length}` : '',
+    e.tolti.length ? `tolti: ${e.tolti.map(t => t.motivo).join(', ')}` : '',
+  ].filter(Boolean).join('\n'));
+}
+
+function mostra(testo) { document.getElementById('esito').textContent = testo; }
+
+// ---------------------------------------------------------------- bottoni
+
+document.getElementById('modi').addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if (!b) return;
+  modo = b.dataset.modo;
+  for (const x of document.querySelectorAll('#modi button')) x.classList.toggle('attivo', x === b);
+});
+document.getElementById('annulla').onclick = () => { if (storia.length) { stato = storia.pop(); animazione = null; } };
+document.getElementById('svuota').onclick = () => { storia.push(stato); stato = { ...stato, dischi: [], posizione: null }; animazione = null; };
+document.getElementById('casuale').onclick = () => {
+  storia.push(stato);
+  const dischi = [];
+  let tentativi = 0;
+  while (dischi.length < 10 && tentativi++ < 2000) {
+    const a = Math.random() * 2 * Math.PI, r = 2.5 + Math.random() * 24;
+    const d = { id: prossimoId++, squadra: dischi.length % 2, x: r * Math.cos(a), y: r * Math.sin(a) };
+    const ok = dischi.every(e => Math.hypot(e.x - d.x, e.y - d.y) > 2 * G.raggioDisco + 0.1) &&
+      C.PIOLI.every(q => Math.hypot(q.x - d.x, q.y - d.y) > G.raggioDisco + G.raggioPiolo + 0.1);
+    if (ok) dischi.push(d);
+  }
+  stato = { ...stato, dischi, posizione: null };
+};
+document.getElementById('moviola').onclick = () => { if (ultimo) avviaAnimazione(ultimo.prima, ultimo.out); };
+document.getElementById('lento').onclick = ev => { lento = !lento; ev.target.textContent = 'Rallentatore: ' + (lento ? 'sì' : 'no'); };
+const btnAudio = document.getElementById('audio');
+const aggiornaAudio = () => { btnAudio.textContent = 'Suoni: ' + (suoni.muto ? 'no' : 'sì'); };
+btnAudio.onclick = () => { suoni.muto = !suoni.muto; aggiornaAudio(); };
+aggiornaAudio();
+document.getElementById('ripristina').onclick = () => {
+  fisica = { ...C.FISICA_DEFAULT }; ui = { ...T.UI_DEFAULT };
+  costruisciCursori(); salva(); ridimensiona();
+};
+
+// ---------------------------------------------------------------- cursori
+
+function costruisciCursori() {
+  const crea = (contenitore, elenco, oggetto) => {
+    contenitore.innerHTML = '';
+    for (const [chiave, etichetta, min, max, step, unita] of elenco) {
+      const daMostrare = () => unita === 'gradi' ? oggetto[chiave] * 180 / Math.PI
+        : unita === 'percento' ? oggetto[chiave] * 100 : oggetto[chiave];
+      const div = document.createElement('div');
+      div.className = 'riga';
+      div.innerHTML = `<label>${etichetta} <b></b></label><input type="range" min="${min}" max="${max}" step="${step}">`;
+      const inp = div.querySelector('input'), val = div.querySelector('b');
+      inp.value = daMostrare();
+      val.textContent = Number(inp.value).toString();
+      inp.oninput = () => {
+        const v = Number(inp.value);
+        oggetto[chiave] = unita === 'gradi' ? v * Math.PI / 180 : unita === 'percento' ? v / 100 : v;
+        val.textContent = v.toString();
+        salva();
+        if (oggetto === ui) ridimensiona();
+      };
+      contenitore.appendChild(div);
+    }
+  };
+  crea(document.getElementById('cursoriFisica'), CURSORI_FISICA, fisica);
+  crea(document.getElementById('cursoriUi'), CURSORI_UI, ui);
+}
+
+function salva() {
+  try { localStorage.setItem('crokinole-banco-cm', JSON.stringify({ fisica, ui })); } catch (e) {}
+  const diversi = o => d => Object.fromEntries(Object.entries(o).filter(([k, v]) => d[k] !== v));
+  document.getElementById('json').value = JSON.stringify({
+    fisica: diversi(fisica)(C.FISICA_DEFAULT),
+    ui: diversi(ui)(T.UI_DEFAULT),
+  }, null, 2);
+}
+
+costruisciCursori();
+salva();
+</script>
+</body>
+</html>

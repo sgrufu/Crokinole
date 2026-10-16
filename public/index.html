@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crokinole</title>
+<style>
+  :root {
+    --panno: #12362a; --panno2: #183f31; --testo: #f1ead8; --tenue: #a9bcae; --oro: #e6b84a;
+    --legno: #6b4527; --legno2: #4a2f1a; --rosso: #c8372d; --blu: #2c5bb0;
+    --pannello: rgba(0, 0, 0, 0.26); --filo: rgba(255, 255, 255, 0.10); --errore: #e07a5f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(ellipse at 35% 25%, var(--panno2), var(--panno) 72%);
+    color: var(--testo); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  button {
+    font: inherit; color: var(--testo); background: rgba(255,255,255,0.08);
+    border: 1px solid var(--filo); border-radius: 7px; padding: 7px 14px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: rgba(255,255,255,0.15); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  button.primario { background: var(--oro); color: #2a1c08; border-color: var(--oro); font-weight: 600; }
+  button.primario:hover:not(:disabled) { background: #f0c860; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--oro); outline-offset: 2px; }
+  input[type=text] {
+    font: inherit; color: var(--testo); background: rgba(0,0,0,0.3); border: 1px solid var(--filo);
+    border-radius: 7px; padding: 8px 10px; width: 100%;
+  }
+  h1, h2, .numero { font-family: Georgia, "Times New Roman", serif; font-weight: normal; }
+  .nascosto { display: none !important; }
+
+  /* ---------------------------------------------------------- ingresso */
+  #ingresso { display: grid; place-items: center; min-height: 100vh; padding: 16px; }
+  #ingresso form { width: min(380px, 100%); text-align: center; }
+  #ingresso h1 { font-size: 46px; margin: 0 0 4px; letter-spacing: 0.01em; }
+  #ingresso p { color: var(--tenue); margin: 0 0 22px; }
+  #ingresso .campo { display: flex; gap: 8px; }
+  #erroreIngresso { color: var(--errore); min-height: 1.4em; margin-top: 10px; }
+
+  /* ---------------------------------------------------------- impianto */
+  #app { display: grid; grid-template-columns: minmax(0, 1fr) 340px; height: 100vh; }
+  #principale { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  #laterale { display: flex; flex-direction: column; min-height: 0; background: var(--pannello); border-left: 1px solid var(--filo); }
+  @media (max-width: 900px) {
+    #app { grid-template-columns: 1fr; height: auto; }
+    #principale { height: 100vh; }
+    #laterale { border-left: 0; border-top: 1px solid var(--filo); min-height: 60vh; }
+  }
+
+  /* ---------------------------------------------------------- segnapunti */
+  #segnapunti {
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
+    padding: 10px 18px; background: linear-gradient(var(--legno), var(--legno2));
+    border-bottom: 1px solid rgba(0,0,0,0.4); box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  }
+  .squadra { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .squadra.b { justify-content: flex-end; text-align: right; }
+  .gettone { width: 26px; height: 26px; border-radius: 50%; flex: none; box-shadow: inset 0 -2px 3px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.5); }
+  .gettone.s0 { background: radial-gradient(circle at 35% 35%, #f08a7e, var(--rosso) 70%); }
+  .gettone.s1 { background: radial-gradient(circle at 35% 35%, #86aef2, var(--blu) 70%); }
+  .squadra .numero { font-size: 40px; line-height: 1; }
+  .squadra .chi { font-size: 13px; color: #e9d9bd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .squadra .chi b { font-weight: 600; color: var(--testo); }
+  #centroSegnapunti { text-align: center; font-size: 13px; color: #e9d9bd; }
+  /* i 20 del round: al tavolo vero si mettono da parte in vista */
+  .venti {
+    display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px; border-radius: 999px;
+    background: rgba(0,0,0,0.28); font-family: Georgia, serif; font-size: 17px; white-space: nowrap;
+  }
+  .venti::before {
+    content: '20'; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+    background: radial-gradient(circle, #2a170b 55%, #5a3b22); color: #e9d9bd; font-size: 10px;
+  }
+  .venti.zero { opacity: 0.45; }
+  .venti:empty { display: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    .venti.nuovo { animation: ventiNuovo 0.9s ease-out; }
+    @keyframes ventiNuovo { 0% { background: var(--oro); color: #2a1c08; transform: scale(1.25); } 100% { transform: scale(1); } }
+  }
+  #centroSegnapunti .numero { font-size: 18px; color: var(--testo); }
+
+  /* ---------------------------------------------------------- tavolo */
+  #zonaTavolo { position: relative; flex: 1; min-height: 0; }
+  #tavolo { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+  #turno {
+    position: absolute; left: 50%; top: 12px; transform: translateX(-50%);
+    background: rgba(0,0,0,0.55); border-radius: 999px; padding: 6px 16px; font-size: 14px;
+    display: flex; align-items: center; gap: 10px; white-space: nowrap; pointer-events: none;
+  }
+  #turno.mio { background: var(--oro); color: #2a1c08; font-weight: 600; }
+  #orologio { font-family: Georgia, serif; font-size: 18px; min-width: 2ch; text-align: right; }
+  #comandiTavolo { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 6px; }
+  #comandiTavolo button { padding: 6px 10px; background: rgba(0,0,0,0.45); }
+  #rimasti { position: absolute; left: 12px; bottom: 12px; font-size: 13px; color: var(--tenue); line-height: 1.7; }
+  #rimasti .riga { display: flex; align-items: center; gap: 6px; }
+  #rimasti .punto { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  #rimasti .scollegato { color: var(--errore); }
+  #rimasti .diTurno { color: var(--testo); font-weight: 600; }
+
+  /* ---------------------------------------------------------- sala d'attesa */
+  #sala { flex: 1; overflow-y: auto; padding: 28px 20px; display: flex; flex-direction: column; align-items: center; }
+  #sala h1 { font-size: 34px; margin: 0 0 6px; }
+  #sala > p { color: var(--tenue); margin: 0 0 24px; text-align: center; max-width: 52ch; }
+  #colonne { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; width: min(560px, 100%); }
+  .colonna h2 { font-size: 20px; margin: 0 0 10px; display: flex; align-items: center; gap: 10px; }
+  .posto {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    padding: 14px; margin-bottom: 10px; border-radius: 10px; min-height: 58px;
+    background: rgba(0,0,0,0.22); border: 1px dashed rgba(255,255,255,0.22);
+  }
+  .posto.occupato { border-style: solid; background: rgba(0,0,0,0.32); }
+  .posto.mio { border-color: var(--oro); }
+  .posto .vuoto { color: var(--tenue); }
+  .posto .stato { margin-left: auto; font-size: 12px; color: var(--tenue); }
+  #azioniSala { margin-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #notaAvvio { color: var(--tenue); font-size: 13px; text-align: center; }
+  #sceltaTempo { display: flex; align-items: center; gap: 10px; color: var(--tenue); margin-bottom: 6px; }
+  #tempoTiro {
+    font: inherit; color: var(--testo); background: rgba(0,0,0,0.3); border: 1px solid var(--filo);
+    border-radius: 7px; padding: 6px 8px;
+  }
+  #tempoTiro:disabled { opacity: 0.6; }
+  #richiestaMia { color: var(--tenue); font-size: 13px; }
+
+  /* ---------------------------------------------------------- laterale */
+  .blocco { padding: 12px 16px; border-bottom: 1px solid var(--filo); }
+  .blocco h2 { font-size: 16px; margin: 0 0 8px; color: var(--oro); }
+  #cronaca { max-height: 22vh; overflow-y: auto; font-size: 13px; color: var(--tenue); }
+  #cronaca div { padding: 1px 0; }
+  #cronaca div:last-child { color: var(--testo); }
+  #bloccoChat { flex: 1; display: flex; flex-direction: column; min-height: 200px; }
+  #chat { flex: 1; overflow-y: auto; font-size: 14px; min-height: 0; }
+  #chat .msg { padding: 2px 0; overflow-wrap: anywhere; }
+  #chat .msg b { color: var(--oro); font-weight: 600; }
+  #chat .sistema { color: var(--tenue); font-style: italic; font-size: 13px; }
+  #moduloChat { display: flex; gap: 6px; margin-top: 8px; }
+  #spettatori { font-size: 13px; color: var(--tenue); }
+  #voto { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--tenue); }
+
+  /* ---------------------------------------------------------- finestre */
+  #velo { position: fixed; inset: 0; background: rgba(5, 15, 10, 0.55); display: grid; place-items: center; padding: 16px; z-index: 10; }
+  .finestra {
+    background: linear-gradient(#20473a, #173a2d); border: 1px solid rgba(230,184,74,0.35);
+    border-radius: 12px; padding: 22px 24px; width: min(460px, 100%); box-shadow: 0 18px 50px rgba(0,0,0,0.5);
+  }
+  .finestra h2 { font-size: 26px; margin: 0 0 8px; }
+  .finestra p { color: var(--tenue); margin: 0 0 14px; }
+  .finestra .bottoni { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 16px; }
+  table.conto { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 14px; }
+  table.conto th, table.conto td { padding: 5px 6px; text-align: right; border-bottom: 1px solid var(--filo); }
+  table.conto th:first-child, table.conto td:first-child { text-align: left; }
+  table.conto td.tot { font-family: Georgia, serif; font-size: 20px; }
+  .esitoRound { font-family: Georgia, serif; font-size: 20px; margin: 4px 0 6px; }
+  .attese { font-size: 13px; color: var(--tenue); }
+
+  #avviso {
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 20;
+    background: #3b1f17; border: 1px solid var(--errore); color: #ffd9cc; padding: 9px 16px; border-radius: 8px;
+    max-width: 90vw;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    #avviso { animation: compari 0.2s ease-out; }
+    @keyframes compari { from { opacity: 0; transform: translate(-50%, 8px); } }
+  }
+</style>
+</head>
+<body>
+
+<section id="ingresso" class="nascosto">
+  <form id="moduloIngresso" autocomplete="off">
+    <h1>Crokinole</h1>
+    <p>In 2 o in 4 a coppie. Si tira col dito, qui col mouse.</p>
+    <div class="campo">
+      <input type="text" id="nome" maxlength="16" placeholder="Il tuo nome" aria-label="Il tuo nome" required>
+      <button class="primario" type="submit">Entra</button>
+    </div>
+    <div id="erroreIngresso" role="alert"></div>
+  </form>
+</section>
+
+<div id="app" class="nascosto">
+  <main id="principale">
+    <header id="segnapunti">
+      <div class="squadra a"><span class="gettone s0"></span><span class="numero" id="punti0">0</span><span class="chi" id="chi0"></span><span class="venti" id="venti0" title="20 fatti in questo round"></span></div>
+      <div id="centroSegnapunti"></div>
+      <div class="squadra b"><span class="venti" id="venti1" title="20 fatti in questo round"></span><span class="chi" id="chi1"></span><span class="numero" id="punti1">0</span><span class="gettone s1"></span></div>
+    </header>
+
+    <section id="sala" class="nascosto">
+      <h1>Sala d'attesa</h1>
+      <p>Siediti in una colonna: chi sta nella stessa colonna gioca in squadra. In 2 vi mettete in colonne diverse, in 4 due per colonna.</p>
+      <div id="colonne"></div>
+      <div id="azioniSala">
+        <label id="sceltaTempo">Tempo per ogni tiro
+          <select id="tempoTiro" aria-label="Tempo per ogni tiro"></select>
+        </label>
+        <button class="primario" id="bottoneAvvia" disabled>Avvia la Partita</button>
+        <div id="notaAvvio"></div>
+        <div id="richiestaMia"></div>
+        <button id="bottoneAlzati" class="nascosto">Alzati e guarda</button>
+      </div>
+    </section>
+
+    <section id="zonaTavolo" class="nascosto">
+      <canvas id="tavolo" aria-label="Il tavolo da crokinole"></canvas>
+      <div id="turno"><span id="testoTurno"></span><span id="orologio"></span></div>
+      <div id="rimasti"></div>
+      <div id="comandiTavolo">
+        <button id="bottoneRuota" class="nascosto" title="Guarda da un altro lato">Ruota</button>
+        <button id="bottoneMoviola" title="Rivedi l'ultimo tiro">Moviola</button>
+        <button id="bottoneLento" title="Moviola al rallentatore">Lenta</button>
+        <button id="bottoneAudio" title="Suoni"></button>
+      </div>
+    </section>
+  </main>
+
+  <aside id="laterale">
+    <div class="blocco nascosto" id="bloccoPartita">
+      <h2>Cronaca</h2>
+      <div id="cronaca"></div>
+      <div id="voto" style="margin-top:10px">
+        <button id="bottoneVoto">Chiudi la Partita</button><span id="testoVoto"></span>
+      </div>
+    </div>
+    <div class="blocco" id="bloccoChat">
+      <h2>Chat</h2>
+      <div id="chat" aria-live="polite"></div>
+      <form id="moduloChat" autocomplete="off">
+        <input type="text" id="testoChat" maxlength="300" placeholder="Scrivi" aria-label="Messaggio">
+        <button type="submit">Invia</button>
+      </form>
+    </div>
+    <div class="blocco">
+      <h2>Spettatori</h2>
+      <div id="spettatori"></div>
+    </div>
+  </aside>
+</div>
+
+<div id="velo" class="nascosto"><div class="finestra" id="finestra" role="dialog" aria-modal="true"></div></div>
+<div id="avviso" class="nascosto" role="alert"></div>
+
+<script src="crokinole.js"></script>
+<script src="tavolo.js"></script>
+<script>
+'use strict';
+/*
+ * CLIENT DEL CROKINOLE. Non decide niente: manda intenzioni (posiziona,
+ * tira, continua...) e disegna il pacchetto che riceve. La traiettoria di un
+ * tiro arriva gia' calcolata dal server: qui si riproduce e basta.
+ *
+ * Tutte le variabili di stato sono dichiarate qui in cima, PRIMA di
+ * qualunque funzione che le usi (vedi la trappola della `let` usata prima
+ * della sua riga in ARCHITETTURA-GIOCHI.md). L'avvio e' in fondo al file.
+ */
+const C = window.Crokinole;
+const T = window.Tavolo;
+const G = C.GEOMETRIA;
+const NOMI_SQUADRE = ['Rossi', 'Blu'];
+const CON_ARTICOLO = ['i Rossi', 'i Blu'];
+const CHIAVE_TOKEN = 'crokinole-token';
+
+let mioToken = null;
+let sorgente = null;          // EventSource
+let pk = null;                // ultimo pacchetto
+let ricevutoA = 0;            // performance.now() all'arrivo di pk
+let numeroTiroVisto = null;   // ultimo tiro gia' animato (o saltato)
+let dischiPrima = [];         // dischi dell'ultimo pacchetto, per sapere da dove partiva l'animazione
+let animazione = null;        // {traiettoria, statici, squadre, inizio, velocita, suonati}
+let moviolaDi = null;         // {traiettoria, statici, squadre}: l'ultimo tiro, per rivederlo
+let ventiDaMostrare = null;   // i 20 di prima del tiro, finche' la sua animazione non e' finita
+let lenta = false;
+let mira = null;              // {puntatore} mentre si trascina
+let puntatore = null;         // punto del tavolo sotto il mouse
+let rotazioneSpettatore = 0;  // quale posto sta in basso per chi guarda
+let finestraChiusa = null;    // chiave della finestra che l'utente ha chiuso ("aspetta")
+let ultimaChat = -1;
+let ultimoLog = -1;
+let vista = null;
+let ctx = null;
+const suoni = T.creaSuoni();
+
+const $ = id => document.getElementById(id);
+const canvas = $('tavolo');
+
+// ================================================================ rete
+
+async function posta(percorso, dati = {}) {
+  try {
+    const r = await fetch(percorso, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...dati, token: mioToken }),
+    });
+    const risposta = await r.json().catch(() => ({}));
+    if (!r.ok) avvisa(risposta.errore || `Errore ${r.status}`);
+    return r.ok;
+  } catch (e) {
+    avvisa('Il server non risponde.');
+    return false;
+  }
+}
+
+async function entra(nome) {
+  const r = await fetch('/entra', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome }),
+  });
+  const dati = await r.json().catch(() => ({}));
+  if (!r.ok) { $('erroreIngresso').textContent = dati.errore || 'Non riesco a entrare.'; return; }
+  mioToken = dati.token;
+  try { sessionStorage.setItem(CHIAVE_TOKEN, mioToken); } catch (e) {}
+  collegati();
+}
+
+function collegati() {
+  if (sorgente) sorgente.close();
+  $('ingresso').classList.add('nascosto');
+  $('app').classList.remove('nascosto');
+  sorgente = new EventSource('/eventi?token=' + encodeURIComponent(mioToken));
+  sorgente.onmessage = ev => ricevi(JSON.parse(ev.data));
+  sorgente.onerror = async () => {
+    // il server e' ripartito o il token non vale piu': si torna all'ingresso
+    try {
+      const r = await fetch('/chi-sono?token=' + encodeURIComponent(mioToken));
+      if (r.status === 401) esci();
+    } catch (e) { /* server giu': EventSource riprova da solo */ }
+  };
+}
+
+function esci() {
+  if (sorgente) sorgente.close();
+  sorgente = null; mioToken = null; pk = null;
+  try { sessionStorage.removeItem(CHIAVE_TOKEN); } catch (e) {}
+  $('app').classList.add('nascosto');
+  $('ingresso').classList.remove('nascosto');
+  $('velo').classList.add('nascosto');
+}
+
+async function avvio() {
+  let salvato = null;
+  try { salvato = sessionStorage.getItem(CHIAVE_TOKEN); } catch (e) {}
+  if (salvato) {
+    try {
+      const r = await fetch('/chi-sono?token=' + encodeURIComponent(salvato));
+      if (r.ok) { mioToken = salvato; collegati(); return; }
+    } catch (e) {}
+  }
+  $('ingresso').classList.remove('nascosto');
+  $('nome').focus();
+}
+
+// ================================================================ arrivo dei dati
+
+function ricevi(nuovo) {
+  const prima = pk;
+  pk = nuovo;
+  ricevutoA = performance.now();
+
+  if (pk.fase !== 'attesa') {
+    if (numeroTiroVisto === null || !prima || prima.fase === 'attesa') {
+      // appena collegato o Partita appena iniziata: niente animazione del passato
+      numeroTiroVisto = pk.numeroTiro;
+      if (pk.ultimoTiro) moviolaDi = null;
+    } else if (pk.numeroTiro !== numeroTiroVisto) {
+      numeroTiroVisto = pk.numeroTiro;
+      if (pk.ultimoTiro) {
+        avviaAnimazione(pk.ultimoTiro, dischiPrima);
+        if (animazione && prima.venti) ventiDaMostrare = prima.venti;
+      }
+    }
+    dischiPrima = pk.dischi;
+  } else {
+    numeroTiroVisto = null; animazione = null; moviolaDi = null; dischiPrima = [];
+  }
+  render();
+}
+
+function avviaAnimazione(ultimoTiro, statiPrima, velocita = 1) {
+  const tr = ultimoTiro.traiettoria;
+  const squadre = new Map(statiPrima.map(d => [d.id, d.squadra]));
+  squadre.set(ultimoTiro.esito.idTirato, ultimoTiro.esito.squadra);
+  const dati = { traiettoria: tr, squadre, statici: statiPrima.filter(d => !tr.ids.includes(d.id)) };
+  moviolaDi = dati;
+  if (!tr.ids.length) return; // tiro scaduto: niente da animare
+  suoni.suona({ tipo: 'tiro' });
+  animazione = { ...dati, inizio: performance.now(), velocita, suonati: new Set() };
+}
+
+// ================================================================ disegno della pagina
+
+function render() {
+  if (!pk) return;
+  const inSala = pk.fase === 'attesa';
+  $('sala').classList.toggle('nascosto', !inSala);
+  $('zonaTavolo').classList.toggle('nascosto', inSala);
+  $('bloccoPartita').classList.toggle('nascosto', inSala);
+  if (inSala) renderSala(); else renderPartita();
+  renderChat();
+  renderSpettatori();
+  renderSegnapunti();
+  renderFinestra();
+}
+
+function renderSegnapunti() {
+  const inSala = pk.fase === 'attesa';
+  for (const sq of [0, 1]) {
+    $('punti' + sq).textContent = inSala ? '–' : pk.punteggi[sq];
+    let nomi;
+    if (inSala) nomi = [0, 1, 2, 3].filter(s => s % 2 === sq).map(s => pk.slot[s]?.nome).filter(Boolean);
+    else nomi = pk.nomi.filter((_, i) => C.squadraDi(i) === sq);
+    $('chi' + sq).innerHTML = `<b>${NOMI_SQUADRE[sq]}</b><br>${esc(nomi.join(' e ') || '—')}`;
+  }
+  for (const sq of [0, 1]) {
+    const el = $('venti' + sq);
+    const n = inSala ? null : (animazione && ventiDaMostrare ? ventiDaMostrare : pk.venti)[sq];
+    const prima = el.dataset.n === undefined ? null : Number(el.dataset.n);
+    el.textContent = n === null ? '' : `× ${n}`;
+    el.classList.toggle('zero', n === 0);
+    // si accende quando arriva un 20 nuovo, a fine animazione del tiro
+    if (n !== null && prima !== null && n > prima && pk.round === Number(el.dataset.round)) {
+      el.classList.remove('nuovo'); void el.offsetWidth; el.classList.add('nuovo');
+    }
+    el.dataset.n = n === null ? '' : String(n);
+    el.dataset.round = inSala ? '' : String(pk.round);
+    if (n === null) delete el.dataset.n;
+  }
+  $('centroSegnapunti').innerHTML = inSala ? 'Si gioca fino a 100'
+    : `Round <span class="numero">${pk.round}</span><br>fino a ${pk.puntiVittoria}`;
+}
+
+// ---------------------------------------------------------------- sala
+
+function renderSala() {
+  const col = $('colonne');
+  col.innerHTML = '';
+  for (const sq of [0, 1]) {
+    const c = document.createElement('div');
+    c.className = 'colonna';
+    c.innerHTML = `<h2><span class="gettone s${sq}"></span>${NOMI_SQUADRE[sq]}</h2>`;
+    for (const slot of [sq, sq + 2]) {
+      const occ = pk.slot[slot];
+      const b = document.createElement('button');
+      b.className = 'posto' + (occ ? ' occupato' : '') + (occ && occ.io ? ' mio' : '');
+      if (!occ) b.innerHTML = '<span class="vuoto">Posto libero: siediti qui</span>';
+      else b.innerHTML = `<span>${esc(occ.nome)}</span><span class="stato">${occ.io ? 'tu' : occ.connesso ? '' : 'scollegato'}</span>`;
+      b.disabled = !!(occ && !occ.io && pk.io.slot === null);
+      if (occ && !occ.io && pk.io.slot !== null) b.title = 'Chiedi di scambiare il posto';
+      b.onclick = () => { if (!(occ && occ.io)) posta('/siedi', { slot }); };
+      c.appendChild(b);
+    }
+    col.appendChild(c);
+  }
+  renderSceltaTempo();
+  $('bottoneAvvia').disabled = !pk.puoAvviare;
+  const seduti = pk.slot.filter(Boolean).length;
+  $('notaAvvio').textContent = pk.puoAvviare ? 'Pronti: chiunque sia seduto può avviare.'
+    : seduti === 2 ? 'In 2 serve un giocatore per colonna.'
+    : 'Si parte in 2 (uno per colonna) o in 4.';
+  $('richiestaMia').innerHTML = pk.richiestaMia
+    ? `Hai chiesto a ${esc(pk.richiestaMia.a)} di scambiare il posto. <button id="annullaRichiesta">Annulla</button>` : '';
+  const ann = $('annullaRichiesta');
+  if (ann) ann.onclick = () => posta('/annullaRichiesta');
+  $('bottoneAlzati').classList.toggle('nascosto', pk.io.slot === null);
+}
+
+function renderSceltaTempo() {
+  const sel = $('tempoTiro');
+  const attuale = Math.round(pk.tempoTiroMs / 1000);
+  const opzioni = [...pk.opzioniTempo];
+  if (!opzioni.includes(attuale)) opzioni.unshift(attuale); // valore di prova del server
+  const firma = opzioni.join(',');
+  if (sel.dataset.firma !== firma) {
+    sel.innerHTML = opzioni.map(s => `<option value="${s}">${s ? s + ' secondi' : 'Nessun limite'}</option>`).join('');
+    sel.dataset.firma = firma;
+  }
+  if (document.activeElement !== sel) sel.value = String(attuale);
+  sel.disabled = pk.io.slot === null;
+  sel.title = pk.io.slot === null ? 'Lo sceglie chi è seduto' : '';
+}
+
+// ---------------------------------------------------------------- partita
+
+function mioPosto() { return pk && pk.io && pk.io.posto >= 0 ? pk.io.posto : null; }
+
+function tiroSbloccato() {
+  return pk.tempo && performance.now() - ricevutoA >= pk.tempo.msAlloSblocco && !animazione;
+}
+
+function toccaAMe() {
+  return pk && pk.fase === 'tiro' && mioPosto() !== null && pk.turno === mioPosto();
+}
+
+function renderPartita() {
+  $('bottoneRuota').classList.toggle('nascosto', mioPosto() !== null);
+  renderRimasti();
+  renderCronaca();
+  const v = pk.voti;
+  $('bottoneVoto').classList.toggle('nascosto', mioPosto() === null);
+  $('bottoneVoto').textContent = v.ioSi ? 'Ritira il voto' : 'Chiudi la Partita';
+  $('testoVoto').textContent = v.quanti ? `${v.quanti} su ${v.servono} vogliono chiudere` : '';
+  aggiornaTurno();
+}
+
+function renderRimasti() {
+  const righe = pk.nomi.map((nome, i) => {
+    const sq = C.squadraDi(i);
+    const classi = [!pk.connessi[i] ? 'scollegato' : '', pk.turno === i ? 'diTurno' : ''].join(' ');
+    const punti = '<span class="punto" style="background:' + (sq ? 'var(--blu)' : 'var(--rosso)') + '"></span>';
+    return `<div class="riga ${classi}">${punti} ${esc(nome)}${i === mioPosto() ? ' (tu)' : ''}: ${pk.daTirare[i]}${!pk.connessi[i] ? ' — scollegato' : ''}</div>`;
+  });
+  $('rimasti').innerHTML = righe.join('');
+}
+
+/** Testo e orologio in alto: si aggiorna anche a ogni fotogramma (il tempo scorre). */
+function aggiornaTurno() {
+  if (!pk || pk.fase === 'attesa') return;
+  const el = $('turno');
+  let testo = '', orologio = '';
+  const mio = toccaAMe();
+  if (pk.fase === 'tiro') {
+    const nome = pk.nomi[pk.turno];
+    const trascorso = performance.now() - ricevutoA;
+    if (!tiroSbloccato()) testo = mio ? 'Tocca a te tra un attimo' : `Tocca a ${nome}`;
+    else if (pk.tempo.modo === 'sospeso') testo = `${nome} si è scollegato: si aspetta che rientri`;
+    else if (pk.tempo.modo === 'pronto') testo = mio ? 'Tocca a te' : `${nome} deve dire che è pronto`;
+    else {
+      testo = mio ? (pk.posizione ? 'Premi sul dischetto e trascina indietro' : 'Tocca a te: clicca sull\'arco') : `Tocca a ${nome}`;
+      if (pk.tempo.msAllaScadenza != null) {
+        orologio = Math.max(0, Math.ceil((pk.tempo.msAllaScadenza - trascorso) / 1000)).toString();
+      }
+    }
+  } else if (pk.fase === 'fineRound') testo = 'Fine del round';
+  else if (pk.fase === 'finita') testo = `Vincono ${CON_ARTICOLO[pk.vincitore]}`;
+  if (el.dataset.t !== testo) { $('testoTurno').textContent = testo; el.dataset.t = testo; }
+  if ($('orologio').textContent !== orologio) $('orologio').textContent = orologio;
+  el.classList.toggle('mio', mio && pk.fase === 'tiro');
+}
+
+function renderCronaca() {
+  if (pk.log.length === ultimoLog && $('cronaca').childElementCount) return;
+  ultimoLog = pk.log.length;
+  $('cronaca').innerHTML = pk.log.slice(-30).map(r => `<div>${esc(r)}</div>`).join('');
+  $('cronaca').scrollTop = 1e9;
+}
+
+function renderChat() {
+  const firma = pk.chat.length + ':' + (pk.chat.length ? pk.chat[pk.chat.length - 1].ts : 0);
+  if (firma === ultimaChat) return;
+  ultimaChat = firma;
+  const box = $('chat');
+  const inFondo = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  box.innerHTML = pk.chat.map(m => m.sistema
+    ? `<div class="msg sistema">${esc(m.nome)} ${esc(m.testo)}</div>`
+    : `<div class="msg"><b>${esc(m.nome)}</b> ${esc(m.testo)}</div>`).join('');
+  if (inFondo) box.scrollTop = box.scrollHeight;
+}
+
+function renderSpettatori() {
+  const s = pk.spettatori;
+  $('spettatori').textContent = s.length ? s.map(x => x.nome + (x.connesso ? '' : ' (via)')).join(', ') : 'Nessuno';
+}
+
+// ---------------------------------------------------------------- finestre
+
+/**
+ * Una sola finestra alla volta, decisa dallo stato: richiesta di scambio,
+ * "sei pronto?", riepilogo del round, fine Partita, eliminazione.
+ */
+function renderFinestra() {
+  const f = scegliFinestra();
+  const velo = $('velo');
+  if (!f || f.chiave === finestraChiusa) { velo.classList.add('nascosto'); velo.dataset.chiave = ''; return; }
+  if (velo.dataset.chiave === f.chiave + f.html.length) return; // gia' disegnata uguale
+  velo.dataset.chiave = f.chiave + f.html.length;
+  $('finestra').innerHTML = f.html;
+  velo.classList.remove('nascosto');
+  for (const [id, fn] of Object.entries(f.azioni || {})) { const b = $(id); if (b) b.onclick = fn; }
+  const primo = $('finestra').querySelector('button.primario');
+  if (primo) primo.focus();
+}
+
+function scegliFinestra() {
+  if (!pk) return null;
+  if (pk.fase === 'attesa') {
+    if (!pk.richiestaPerMe) return null;
+    return {
+      chiave: 'scambio',
+      html: `<h2>Scambio di posto</h2><p>${esc(pk.richiestaPerMe.da)} vuole prendere il tuo posto e darti il suo.</p>
+        <div class="bottoni"><button id="fRifiuta">Rifiuta</button><button class="primario" id="fAccetta">Accetta</button></div>`,
+      azioni: { fAccetta: () => posta('/rispondi', { accetta: true }), fRifiuta: () => posta('/rispondi', { accetta: false }) },
+    };
+  }
+  if (pk.puoiEliminare) {
+    return {
+      chiave: 'elimina',
+      html: `<h2>Sei il primo a rientrare</h2><p>Gli altri giocatori non sono collegati. Puoi aspettarli o eliminare la Partita e tornare in sala d'attesa.</p>
+        <div class="bottoni"><button id="fElimina">Elimina la Partita</button><button class="primario" id="fAspetta">Aspetta gli altri</button></div>`,
+      azioni: { fElimina: () => posta('/elimina'), fAspetta: () => { finestraChiusa = 'elimina'; renderFinestra(); } },
+    };
+  }
+  if (animazione) return null; // prima si guarda dove finiscono i dischetti
+  if (pk.fase === 'tiro' && toccaAMe() && pk.tempo.modo === 'pronto' && tiroSbloccato()) {
+    return {
+      chiave: 'pronto',
+      html: `<h2>Tocca a te</h2><p>Sei rientrato al tuo turno. Il tempo per tirare parte quando confermi.</p>
+        <div class="bottoni"><button class="primario" id="fPronto">Sono pronto</button></div>`,
+      azioni: { fPronto: () => posta('/pronto') },
+    };
+  }
+  if (pk.fase === 'fineRound' || pk.fase === 'finita') {
+    const r = pk.riepilogo;
+    const giocatore = mioPosto() !== null;
+    const tabella = tabellaConto(r);
+    const esito = r.segna === null ? 'Pari: nessuno segna.' : `Segnano ${CON_ARTICOLO[r.segna]}: +${r.delta}`;
+    if (pk.fase === 'fineRound') {
+      const fatto = giocatore && pk.continuaPremuto[mioPosto()];
+      const mancano = pk.nomi.filter((_, i) => pk.connessi[i] && !pk.continuaPremuto[i]);
+      return {
+        chiave: 'round' + r.round + (fatto ? 'f' : ''),
+        html: `<h2>Fine del round ${r.round}</h2>${tabella}<div class="esitoRound">${esito}</div>
+          <p>Rossi ${r.punteggi[0]}, Blu ${r.punteggi[1]}. Si gioca fino a ${pk.puntiVittoria}.</p>
+          <div class="attese">${mancano.length ? 'Aspettiamo: ' + esc(mancano.join(', ')) : ''}</div>
+          <div class="bottoni">${giocatore ? `<button class="primario" id="fContinua" ${fatto ? 'disabled' : ''}>${fatto ? 'Aspetto gli altri' : 'Continua'}</button>` : ''}</div>`,
+        azioni: { fContinua: () => posta('/continua') },
+      };
+    }
+    const risposta = giocatore ? pk.ancoraRisposte[mioPosto()] : null;
+    const mancano = pk.nomi.filter((_, i) => pk.connessi[i] && pk.ancoraRisposte[i] === null);
+    return {
+      chiave: 'fine' + r.round + String(risposta),
+      html: `<h2>Vincono ${CON_ARTICOLO[pk.vincitore]}</h2>
+        <p>${pk.punteggi[pk.vincitore]} a ${pk.punteggi[1 - pk.vincitore]}, in ${pk.round} round.</p>
+        ${tabella}<div class="esitoRound">Ultimo round: ${esito}</div>
+        <div class="attese">${mancano.length ? 'Aspettiamo: ' + esc(mancano.join(', ')) : ''}</div>
+        ${giocatore ? (risposta === null
+          ? `<p>Vuoi giocare ancora?</p><div class="bottoni"><button id="fNo">No</button><button class="primario" id="fSi">Sì, rivincita</button></div>`
+          : `<p>Hai risposto ${risposta ? 'sì' : 'no'}.</p>`) : ''}`,
+      azioni: { fSi: () => posta('/ancora', { si: true }), fNo: () => posta('/ancora', { si: false }) },
+    };
+  }
+  return null;
+}
+
+function tabellaConto(r) {
+  const riga = (et, k) => `<tr><td>${et}</td><td>${r.dettaglio[0].conteggio[k]}</td><td>${r.dettaglio[1].conteggio[k]}</td></tr>`;
+  return `<table class="conto"><tr><th></th><th>Rossi</th><th>Blu</th></tr>
+    ${riga('20', 20)}${riga('15', 15)}${riga('10', 10)}${riga('5', 5)}
+    <tr><td>Totale</td><td class="tot">${r.dettaglio[0].totale}</td><td class="tot">${r.dettaglio[1].totale}</td></tr></table>`;
+}
+
+// ================================================================ il tavolo (canvas)
+
+function angoloInBasso() {
+  if (!pk || pk.fase === 'attesa') return -Math.PI / 2;
+  const p = mioPosto() !== null ? mioPosto() : rotazioneSpettatore % pk.n;
+  return C.angoloPosto(pk.n, p);
+}
+
+function ridimensiona() {
+  const r = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.round(r.width * dpr));
+  canvas.height = Math.max(1, Math.round(r.height * dpr));
+  vista = null;
+}
+
+function vistaAttuale() {
+  const a = angoloInBasso();
+  if (!vista || vista.angoloInBasso !== a || vista.larghezzaPx !== canvas.width || vista.altezzaPx !== canvas.height) {
+    vista = T.creaVista(canvas.width, canvas.height, G, a);
+  }
+  return vista;
+}
+
+function puntoDa(ev) {
+  const r = canvas.getBoundingClientRect();
+  const dpr = canvas.width / (r.width || 1);
+  const [x, y] = vistaAttuale().daSchermo((ev.clientX - r.left) * dpr, (ev.clientY - r.top) * dpr);
+  return { x, y };
+}
+
+function fotogramma(adesso) {
+  requestAnimationFrame(fotogramma);
+  if (!pk || pk.fase === 'attesa' || !ctx) return;
+  aggiornaTurno();
+  const v = vistaAttuale();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  T.disegnaTavolo(ctx, v, C);
+
+  if (animazione) {
+    const t = (adesso - animazione.inizio) / 1000 * animazione.velocita;
+    for (const s of animazione.traiettoria.suoni) {
+      if (s.t <= t && !animazione.suonati.has(s)) { animazione.suonati.add(s); if (animazione.velocita === 1) suoni.suona(s); }
+    }
+    for (const d of animazione.statici) T.disegnaDisco(ctx, v, d.x, d.y, d.squadra);
+    for (const [id, p] of T.posizioniAl(animazione.traiettoria, t)) {
+      if (p) T.disegnaDisco(ctx, v, p.x, p.y, animazione.squadre.get(id));
+    }
+    if (t >= animazione.traiettoria.durata) { animazione = null; ventiDaMostrare = null; renderSegnapunti(); renderFinestra(); }
+    return;
+  }
+
+  for (const d of pk.dischi) T.disegnaDisco(ctx, v, d.x, d.y, d.squadra);
+  if (pk.fase !== 'tiro') return;
+
+  // il dischetto posizionato da chi e' di turno (lo vedono tutti)
+  if (pk.posizione) {
+    T.disegnaDisco(ctx, v, pk.posizione.x, pk.posizione.y, C.squadraDi(pk.turno),
+      { alone: toccaAMe() ? 'rgba(230,184,74,0.30)' : null });
+  }
+  if (!toccaAMe() || !tiroSbloccato() || pk.tempo.modo === 'sospeso') return;
+
+  // anteprima del posizionamento (solo finche' il dischetto non e' giu':
+  // poi non si sposta piu')
+  if (puntatore && !mira && !pk.posizione && T.vicinoAllArco(puntatore, G)) {
+    const phi = Math.atan2(puntatore.y, puntatore.x);
+    const p = C.posizioneSuArco(pk.n, mioPosto(), phi);
+    const libera = C.posizioneLibera({ dischi: pk.dischi, n: pk.n }, mioPosto(), phi);
+    T.disegnaDisco(ctx, v, p.x, p.y, C.squadraDi(mioPosto()), { alfa: 0.45, vietato: !libera });
+  }
+  if (mira && pk.posizione) {
+    T.disegnaMira(ctx, v, pk.posizione, mira.puntatore, T.miraDaTrascinamento(pk.posizione, mira.puntatore));
+  }
+}
+
+// ================================================================ gesti sul tavolo
+
+function quandoPreme(ev) {
+  suoni.sblocca();
+  if (!toccaAMe() || !tiroSbloccato()) return;
+  const p = puntoDa(ev);
+  if (pk.posizione && pk.posizione.posto === mioPosto() && T.sopraIlDisco(p, pk.posizione, G)) {
+    mira = { puntatore: p };
+    try { canvas.setPointerCapture(ev.pointerId); } catch (e) {}
+    return;
+  }
+  if (!pk.posizione && T.vicinoAllArco(p, G)) posizionaDischetto(Math.atan2(p.y, p.x));
+}
+
+function posizionaDischetto(phi) {
+  if (!C.posizioneLibera({ dischi: pk.dischi, n: pk.n }, mioPosto(), phi)) { avvisa("Lì c'è già un dischetto."); return; }
+  return posta('/posiziona', { phi });
+}
+
+function quandoMuove(ev) {
+  puntatore = puntoDa(ev);
+  if (mira) mira.puntatore = puntatore;
+}
+
+function quandoRilascia() {
+  if (!mira) return;
+  const m = T.miraDaTrascinamento(pk.posizione, mira.puntatore);
+  mira = null;
+  if (m.annullato || !toccaAMe()) return;
+  tira(m.angolo, m.forza);
+}
+
+function tira(angolo, forza) { return posta('/tira', { angolo, forza }); }
+
+// ================================================================ utilita'
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+let timerAvviso = null;
+function avvisa(testo) {
+  const a = $('avviso');
+  a.textContent = testo;
+  a.classList.remove('nascosto');
+  clearTimeout(timerAvviso);
+  timerAvviso = setTimeout(() => a.classList.add('nascosto'), 3200);
+}
+
+function aggiornaAudio() { $('bottoneAudio').textContent = suoni.muto ? 'Suoni: no' : 'Suoni: sì'; }
+
+// ================================================================ collegamenti e avvio
+
+$('moduloIngresso').addEventListener('submit', ev => {
+  ev.preventDefault();
+  $('erroreIngresso').textContent = '';
+  entra($('nome').value.trim());
+});
+$('moduloChat').addEventListener('submit', ev => {
+  ev.preventDefault();
+  const t = $('testoChat').value.trim();
+  if (!t) return;
+  $('testoChat').value = '';
+  posta('/chat', { testo: t });
+});
+$('bottoneAvvia').onclick = () => posta('/avvia');
+$('tempoTiro').addEventListener('change', ev => posta('/tempo', { secondi: Number(ev.target.value) }));
+$('bottoneAlzati').onclick = () => posta('/alzati');
+$('bottoneVoto').onclick = () => posta('/vota', { si: !(pk && pk.voti && pk.voti.ioSi) });
+$('bottoneRuota').onclick = () => { rotazioneSpettatore++; };
+$('bottoneMoviola').onclick = () => {
+  if (!moviolaDi || animazione || mira) return;
+  animazione = { ...moviolaDi, inizio: performance.now(), velocita: lenta ? 0.3 : 1, suonati: new Set() };
+};
+$('bottoneLento').onclick = () => { lenta = !lenta; $('bottoneLento').textContent = lenta ? 'Lenta: sì' : 'Lenta'; };
+$('bottoneAudio').onclick = () => { suoni.muto = !suoni.muto; aggiornaAudio(); };
+
+canvas.addEventListener('pointerdown', quandoPreme);
+canvas.addEventListener('pointermove', quandoMuove);
+canvas.addEventListener('pointerup', quandoRilascia);
+canvas.addEventListener('pointercancel', () => { mira = null; });
+canvas.addEventListener('pointerleave', () => { puntatore = null; });
+
+ctx = canvas.getContext ? canvas.getContext('2d') : null;
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(ridimensiona).observe($('zonaTavolo'));
+window.addEventListener('resize', ridimensiona);
+ridimensiona();
+aggiornaAudio();
+requestAnimationFrame(fotogramma);
+avvio();
+</script>
+</body>
+</html>
