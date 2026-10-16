@@ -25,7 +25,7 @@
     trascinamentoMinimo: 1,   // sotto: tiro annullato
     // su touch il tavolo e' piccolo e 11.5 cm sono pochi pixel: la forza piena
     // richiede almeno tanti pixel (CSS) di trascinamento; 0 = come col mouse
-    pienoMinimoTouchPx: 170,
+    pienoMinimoTouchPx: 110,
     lunghezzaFreccia: 2.5,    // freccia di mira; 0 = niente freccia
     quotaElastico: 0.4,       // l'elastico tratteggiato mostra solo questa frazione del trascinamento (0 = niente)
     margineBordo: 3,          // cornice di legno oltre il fossato
