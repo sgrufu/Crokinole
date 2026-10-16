@@ -67,6 +67,7 @@ function pacchettoSala() {
     fase: 'attesa',
     slot: [{ nome: 'Anna', connesso: true, io: true }, { nome: 'Bea', connesso: true, io: false }, null, null],
     puoAvviare: true, richiestaPerMe: null, richiestaMia: null, opzioniTempo: [10, 15, 20, 30, 45, 60, 0],
+    puntiVittoria: 100, opzioniPunti: [50, 75, 100, 150, 200],
   };
 }
 

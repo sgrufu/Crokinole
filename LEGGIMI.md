@@ -52,7 +52,7 @@ npm install --no-save jsdom eventsource   # solo per i test
 Variabili d'ambiente del server utili per i test:
 
 - `ANIMAZIONE_FATTORE=0` toglie l'attesa delle animazioni.
-- `PUNTI_VITTORIA=30` accorcia la Partita.
+- `PUNTI_VITTORIA=30` cambia i punti per vincere proposti in sala (di solito 100; in sala si sceglie tra 50, 75, 100, 150, 200).
 - `TEMPO_TIRO_MS=300` fa scadere il timer di tiro quasi subito.
 - `GRAZIA_MS` imposta l'attesa prima di liberare il posto di chi si scollega in sala d'attesa.
 
@@ -69,5 +69,5 @@ L'imprecisione del tiro (angolo e forza) è già prevista ma è spenta di defaul
 La repo contiene `render.yaml`: su render.com **New → Blueprint**, scegli questa repo e conferma. Ogni push su `main` rifà il deploy.
 
 - La porta arriva da Render nella variabile `PORT` (in locale resta 3004).
-- Ogni 10 minuti il server chiama `/sveglia` sul proprio indirizzo pubblico (`RENDER_EXTERNAL_URL`, fornito da Render) per non farsi spegnere dal piano gratuito. In locale non succede.
+- Finché c'è almeno una pagina collegata, ogni 10 minuti il server chiama `/sveglia` sul proprio indirizzo pubblico (`RENDER_EXTERNAL_URL`, fornito da Render) per non farsi spegnere dal piano gratuito. Quando se ne vanno tutti smette: dopo ~15 minuti Render lo spegne e al primo accesso si riaccende (30–60 secondi). In locale non succede.
 - Se Render riavvia il servizio (per esempio a ogni deploy) la Partita in corso è persa.

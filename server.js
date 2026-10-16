@@ -40,7 +40,9 @@ const MARGINE_ANIMAZIONE_MS = 700;
 // 0 nei test end-to-end: niente attese per le animazioni
 const FATTORE_ANIMAZIONE = process.env.ANIMAZIONE_FATTORE != null ? Number(process.env.ANIMAZIONE_FATTORE) : 1;
 const GRAZIA_MS = Number(process.env.GRAZIA_MS) || 8000;
-const FISICA = process.env.PUNTI_VITTORIA ? { puntiVittoria: Number(process.env.PUNTI_VITTORIA) } : {};
+// punti per vincere: si scelgono in sala d'attesa (PUNTI_VITTORIA cambia il default, utile nei test)
+const OPZIONI_PUNTI = [50, 75, 100, 150, 200];
+const PUNTI_VITTORIA_DEFAULT = Number(process.env.PUNTI_VITTORIA) || 100;
 
 const colonnaDi = slot => slot % 2;          // 0 = squadra A (Rossi), 1 = squadra B (Blu)
 const NOMI_SQUADRE = ['Rossi', 'Blu'];
@@ -59,6 +61,7 @@ function tavoloVuoto() {
     versione: 0,
     richieste: [],           // [{da, a}] richieste di scambio posto
     tempoTiroMs: TEMPO_TIRO_DEFAULT_MS, // scelto in sala d'attesa; 0 = nessun limite
+    puntiVittoria: PUNTI_VITTORIA_DEFAULT, // scelti in sala d'attesa
     partita: null,
     partiteGiocate: 0,
   };
@@ -121,7 +124,7 @@ function avviaPartita() {
     : [s.find(p => colonnaDi(p.slot) === 0).token, s.find(p => colonnaDi(p.slot) === 1).token];
   const seed = (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
   const nomi = posti.map(t => cerca(t).nome);
-  const stato = C.nuovaPartita({ giocatori: nomi, seed, fisica: FISICA });
+  const stato = C.nuovaPartita({ giocatori: nomi, seed, fisica: { puntiVittoria: tavolo.puntiVittoria } });
   tavolo.richieste = [];
   tavolo.partiteGiocate++;
   tavolo.partita = {
@@ -133,7 +136,7 @@ function avviaPartita() {
   };
   const squadre = [0, 1].map(sq => posti.filter((_, i) => C.squadraDi(i) === sq).map(t => cerca(t).nome).join(' e '));
   annota(`— Partita ${tavolo.partiteGiocate}: ${squadre[0]} (Rossi) contro ${squadre[1]} (Blu). [seed ${seed}]`);
-  annota(`Il sorteggio fa aprire ${nomi[stato.turno]}. ${descriviTempo(tavolo.tempoTiroMs)}.`);
+  annota(`Il sorteggio fa aprire ${nomi[stato.turno]}. ${descriviTempo(tavolo.tempoTiroMs)}. Si gioca fino a ${tavolo.puntiVittoria}.`);
 }
 
 function descriviTempo(ms) {
@@ -308,6 +311,8 @@ function pacchetto(persona) {
       slot,
       puoAvviare: puoAvviare() && persona.slot !== null,
       opzioniTempo: OPZIONI_TEMPO_S,
+      puntiVittoria: tavolo.puntiVittoria,
+      opzioniPunti: OPZIONI_PUNTI,
       richiestaPerMe: perMe ? { da: cerca(perMe.da)?.nome, slot: cerca(perMe.da)?.slot } : null,
       richiestaMia: mia ? { a: cerca(mia.a)?.nome } : null,
     };
@@ -452,6 +457,15 @@ const AZIONI = {
     if (secondi * 1000 === tavolo.tempoTiroMs) return;
     tavolo.tempoTiroMs = secondi * 1000;
     scriviInChat(persona.nome, secondi ? `imposta ${secondi} secondi per tiro` : 'toglie il limite di tempo', true);
+  },
+  punti(persona, dati) {
+    if (tavolo.partita) return [409, { errore: 'I punti si scelgono prima di iniziare' }];
+    if (persona.slot === null) return [409, { errore: 'Solo chi è seduto sceglie i punti' }];
+    const punti = Number(dati.punti);
+    if (!OPZIONI_PUNTI.includes(punti)) return [400, { errore: 'Punti non previsti' }];
+    if (punti === tavolo.puntiVittoria) return;
+    tavolo.puntiVittoria = punti;
+    scriviInChat(persona.nome, `imposta la Partita a ${punti} punti`, true);
   },
   annullaRichiesta(persona) {
     tavolo.richieste = tavolo.richieste.filter(r => r.da !== persona.token);
@@ -668,11 +682,14 @@ server.listen(PORTA, () => {
   console.log('');
 
   // Sul piano gratuito Render spegne il servizio dopo ~15 minuti senza
-  // traffico in arrivo: ogni 10 minuti il server chiama se stesso passando
-  // dall'indirizzo pubblico, cosi' resta sveglio. In locale non fa niente.
+  // traffico in arrivo. Finche' c'e' almeno una pagina collegata il server
+  // chiama se stesso ogni 10 minuti dall'indirizzo pubblico, cosi' resta
+  // sveglio; quando se ne vanno tutti smette e Render puo' spegnerlo.
+  // In locale non fa niente.
   if (INDIRIZZO_PUBBLICO) {
-    console.log(`  Indirizzo pubblico: ${INDIRIZZO_PUBBLICO} (sveglia ogni ${SVEGLIA_MS / 60000} minuti)`);
+    console.log(`  Indirizzo pubblico: ${INDIRIZZO_PUBBLICO} (sveglia ogni ${SVEGLIA_MS / 60000} minuti se c'e' qualcuno)`);
     setInterval(() => {
+      if (tavolo.ascoltatori.size === 0) return;
       require('https').get(INDIRIZZO_PUBBLICO + '/sveglia', r => r.resume())
         .on('error', e => console.log('  sveglia fallita:', e.message));
     }, SVEGLIA_MS).unref();

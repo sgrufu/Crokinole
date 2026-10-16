@@ -67,14 +67,25 @@
   #centroSegnapunti { text-align: center; font-size: 13px; color: #e9d9bd; }
   /* i 20 del round: al tavolo vero si mettono da parte in vista */
   .venti {
-    display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px; border-radius: 999px;
-    background: rgba(0,0,0,0.28); font-family: Georgia, serif; font-size: 17px; white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 999px;
+    background: rgba(0,0,0,0.35); border: 1px solid rgba(230,184,74,0.55);
+    font-family: Georgia, serif; font-size: 24px; line-height: 1; white-space: nowrap; color: var(--testo);
   }
   .venti::before {
-    content: '20'; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
-    background: radial-gradient(circle, #2a170b 55%, #5a3b22); color: #e9d9bd; font-size: 10px;
+    content: '20'; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%;
+    background: radial-gradient(circle, #2a170b 50%, #5a3b22); color: var(--oro); font-size: 13px; font-weight: bold;
+    box-shadow: inset 0 0 0 2px rgba(230,184,74,0.6);
   }
-  .venti.zero { opacity: 0.45; }
+  .venti.zero { opacity: 0.7; }
+  @media (max-width: 600px) {
+    #segnapunti { gap: 6px; padding: 10px 10px; }
+    .squadra { gap: 6px; }
+    .squadra .numero { font-size: 32px; }
+    .gettone { width: 20px; height: 20px; }
+    .venti { font-size: 17px; gap: 4px; padding: 2px 8px 2px 2px; }
+    .venti::before { width: 24px; height: 24px; font-size: 10px; }
+    #centroSegnapunti { font-size: 12px; }
+  }
   .venti:empty { display: none; }
   @media (prefers-reduced-motion: no-preference) {
     .venti.nuovo { animation: ventiNuovo 0.9s ease-out; }
@@ -117,12 +128,12 @@
   .posto .stato { margin-left: auto; font-size: 12px; color: var(--tenue); }
   #azioniSala { margin-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
   #notaAvvio { color: var(--tenue); font-size: 13px; text-align: center; }
-  #sceltaTempo { display: flex; align-items: center; gap: 10px; color: var(--tenue); margin-bottom: 6px; }
-  #tempoTiro {
+  #sceltaTempo, #sceltaPunti { display: flex; align-items: center; gap: 10px; color: var(--tenue); margin-bottom: 6px; }
+  #tempoTiro, #puntiVittoria {
     font: inherit; color: var(--testo); background: rgba(0,0,0,0.3); border: 1px solid var(--filo);
     border-radius: 7px; padding: 6px 8px;
   }
-  #tempoTiro:disabled { opacity: 0.6; }
+  #tempoTiro:disabled, #puntiVittoria:disabled { opacity: 0.6; }
   #richiestaMia { color: var(--tenue); font-size: 13px; }
 
   /* ---------------------------------------------------------- laterale */
@@ -196,6 +207,9 @@
       <div id="azioniSala">
         <label id="sceltaTempo">Tempo per ogni tiro
           <select id="tempoTiro" aria-label="Tempo per ogni tiro"></select>
+        </label>
+        <label id="sceltaPunti">Si gioca fino a
+          <select id="puntiVittoria" aria-label="Punti per vincere"></select>
         </label>
         <button class="primario" id="bottoneAvvia" disabled>Avvia la Partita</button>
         <div id="notaAvvio"></div>
@@ -426,7 +440,7 @@ function renderSegnapunti() {
     el.dataset.round = inSala ? '' : String(pk.round);
     if (n === null) delete el.dataset.n;
   }
-  $('centroSegnapunti').innerHTML = inSala ? 'Si gioca fino a 100'
+  $('centroSegnapunti').innerHTML = inSala ? `Si gioca fino a ${pk.puntiVittoria}`
     : `Round <span class="numero">${pk.round}</span><br>fino a ${pk.puntiVittoria}`;
 }
 
@@ -453,6 +467,7 @@ function renderSala() {
     col.appendChild(c);
   }
   renderSceltaTempo();
+  renderSceltaPunti();
   $('bottoneAvvia').disabled = !pk.puoAvviare;
   const seduti = pk.slot.filter(Boolean).length;
   $('notaAvvio').textContent = pk.puoAvviare ? 'Pronti: chiunque sia seduto può avviare.'
@@ -463,6 +478,20 @@ function renderSala() {
   const ann = $('annullaRichiesta');
   if (ann) ann.onclick = () => posta('/annullaRichiesta');
   $('bottoneAlzati').classList.toggle('nascosto', pk.io.slot === null);
+}
+
+function renderSceltaPunti() {
+  const sel = $('puntiVittoria');
+  const opzioni = [...pk.opzioniPunti];
+  if (!opzioni.includes(pk.puntiVittoria)) opzioni.unshift(pk.puntiVittoria); // valore di prova del server
+  const firma = opzioni.join(',');
+  if (sel.dataset.firma !== firma) {
+    sel.innerHTML = opzioni.map(n => `<option value="${n}">${n} punti</option>`).join('');
+    sel.dataset.firma = firma;
+  }
+  if (document.activeElement !== sel) sel.value = String(pk.puntiVittoria);
+  sel.disabled = pk.io.slot === null;
+  sel.title = pk.io.slot === null ? 'Lo sceglie chi è seduto' : '';
 }
 
 function renderSceltaTempo() {
@@ -792,6 +821,7 @@ $('moduloChat').addEventListener('submit', ev => {
 });
 $('bottoneAvvia').onclick = () => posta('/avvia');
 $('tempoTiro').addEventListener('change', ev => posta('/tempo', { secondi: Number(ev.target.value) }));
+$('puntiVittoria').addEventListener('change', ev => posta('/punti', { punti: Number(ev.target.value) }));
 $('bottoneAlzati').onclick = () => posta('/alzati');
 $('bottoneVoto').onclick = () => posta('/vota', { si: !(pk && pk.voti && pk.voti.ioSi) });
 $('bottoneRuota').onclick = () => { rotazioneSpettatore++; };
